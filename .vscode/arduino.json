@@ -1,0 +1,8 @@
+{
+    "configuration": "cpu=atmega2560",
+    "board": "arduino:avr:mega",
+    "port": "/dev/tty.usbmodem143201",
+    "programmer": "avrisp",
+    "sketch": "mine_sniffer.ino",
+    "output": "../ArduinoOutput"
+}
