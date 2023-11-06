@@ -1,3 +1,9 @@
+#include <IBusBM.h>
+#include <ServoEasing.hpp>
+#include <Servo.h>
+#include <AccelStepper.h>
+#include <MultiStepper.h>
+
 /*
  *    Mars Rover - Arduino Code
  *    by Dejan, www.HowToMechatronics.com
@@ -8,10 +14,8 @@
  *   AccelStepper:http://www.airspayce.com/mikem/arduino/AccelStepper/index.html
  */
 
-#include <Servo.h>
-#include <ServoEasing.h>
-#include <IBusBM.h>
-#include <AccelStepper.h>
+
+
 
 #define motorW1_IN1 6
 #define motorW1_IN2 7
@@ -51,6 +55,8 @@ int camPan = 0;
 float speed1, speed2, speed3 = 0;
 float speed1PWM, speed2PWM, speed3PWM = 0;
 float thetaInnerFront, thetaInnerBack, thetaOuterFront, thetaOuterBack = 0;
+int incomingByte = 0;
+bool go_forward = false;
 
 
 float d1 = 271; // distance in mm
@@ -69,8 +75,7 @@ void setup() {
     TCCR5B = TCCR5B & B11111000 | B00000101; // D4, D13 PWM frequency of 30.64 Hz
     TCCR3B = TCCR3B & B11111000 | B00000101;    // D2, D3, D5 PWM frequency of 30.64 Hz
   */
-  
-  Serial.begin(115200);
+  Serial.begin(9600);
   IBus.begin(Serial1, IBUSBM_NOTIMER); // Servo iBUS
   IBusSensor.begin(Serial2, IBUSBM_NOTIMER); // Sensor iBUS
 
@@ -126,11 +131,28 @@ void setup() {
 void loop() {
   // Reading the data comming from the RC Transmitter
   IBus.loop();
-  ch0 = IBus.readChannel(0);
-  ch1 = IBus.readChannel(1);
-  ch2 = IBus.readChannel(2);
-  ch3 = IBus.readChannel(3);
+  //ch0 = IBus.readChannel(0); //steering
+  ch0 = 1486;
+  ch1 = IBus.readChannel(1); //cam steering
+  //ch2 = IBus.readChannel(2);
+  ch2 = 1300;
+  ch3 = IBus.readChannel(3); //cam steering
   ch6 = IBus.readChannel(6);
+
+  if (Serial.available()>0) {
+    incomingByte = Serial.read();
+    Serial.print("\nI received: ");
+    Serial.print(incomingByte, DEC);
+    Serial.print("\n");
+    Serial.print(s);
+
+    if (incomingByte == 119){
+      go_forward = true;
+    }
+    if (incomingByte == 115){
+      go_forward = false;
+    }
+  }
 
   // Convertign the incoming data
   // Steering right
@@ -143,7 +165,6 @@ void loop() {
   }
   // Rover speed in % from 0 to 100
   s = map(ch2, 1000, 2000, 0, 100); // rover speed from 0% to 100%
-
   // Camera head steering
   if (ch1 < 1485 ) {
     if (camTilt >= 35) {
@@ -186,7 +207,7 @@ void loop() {
     servoW6.startEaseTo(96 - thetaOuterBack);
 
     // DC Motors
-    if (ch6 < 1500) { // Move forward
+    if (incomingByte == 119) { // Move forward ch6<1500
       // Motor Wheel 1 - Left Front
       analogWrite(motorW1_IN1, speed1PWM);   // Outer wheels running at speed1 - max speed
       digitalWrite(motorW1_IN2, LOW);
@@ -207,7 +228,7 @@ void loop() {
       digitalWrite(motorW6_IN1, LOW);
       analogWrite(motorW6_IN2, speed2PWM); // Inner back wheel running at speed2 - lower speed
     }
-    else if (ch6 > 1500) {
+    else if (incomingByte == 115) { //ch6 > 1500
       // Motor Wheel 1 - Left Front
       digitalWrite(motorW1_IN1, LOW);   // Outer wheels running at speed1 - max speed
       analogWrite(motorW1_IN2, speed1PWM);
@@ -291,7 +312,7 @@ void loop() {
     servoW6.startEaseTo(96);
 
     // DC Motors
-    if (ch6 < 1500) {
+    if (go_forward) {
       // Motor Wheel 1 - Left Front
       analogWrite(motorW1_IN1, speed1PWM);  // all wheels move at the same speed
       digitalWrite(motorW1_IN2, LOW); // Forward
@@ -312,7 +333,7 @@ void loop() {
       digitalWrite(motorW6_IN1, LOW);
       analogWrite(motorW6_IN2, speed1PWM);
     }
-    else if (ch6 > 1500) {
+    else if (false) {
       // Motor Wheel 1 - Left Front
       digitalWrite(motorW1_IN1, LOW);  // all wheels move at the same speed
       analogWrite(motorW1_IN2, speed1PWM); // Forward

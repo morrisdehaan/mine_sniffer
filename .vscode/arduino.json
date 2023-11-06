@@ -3,6 +3,5 @@
     "board": "arduino:avr:mega",
     "port": "/dev/tty.usbmodem143201",
     "programmer": "avrisp",
-    "sketch": "mine_sniffer.ino",
-    "output": "../ArduinoOutput"
+    "sketch": "Mars_Rover_arduino_code.ino"
 }
