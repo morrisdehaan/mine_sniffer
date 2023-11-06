@@ -3,7 +3,6 @@
 #include <Servo.h>
 #include <AccelStepper.h>
 #include <MultiStepper.h>
-//goeimoegeresfd
 
 /*
  *    Mars Rover - Arduino Code
