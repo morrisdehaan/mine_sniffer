@@ -1,72 +1,193 @@
-#include <IBusBM.h>
-#include <ServoEasing.hpp>
 #include <Servo.h>
-#include <AccelStepper.h>
-#include <MultiStepper.h>
+#include <ServoEasing.hpp>
 
 /*
- *    Mars Rover - Arduino Code
- *    by Dejan, www.HowToMechatronics.com
+ *    Mine Sniffer Arduino Code
  * 
  *   Libraries:
  *   ServoEasing: https://github.com/ArminJo/ServoEasing
- *   IBusBM: https://github.com/bmellink/IBusBM
- *   AccelStepper:http://www.airspayce.com/mikem/arduino/AccelStepper/index.html
  */
 
-
-
-
+// motor input pins
 #define motorW1_IN1 6
-#define motorW1_IN2 7
+#define motorW1_IN2 7 //PWM
 #define motorW2_IN1 4
-#define motorW2_IN2 5
+#define motorW2_IN2 5 //PWM
 #define motorW3_IN1 2
-#define motorW3_IN2 3
+#define motorW3_IN2 3 //PWM
 #define motorW4_IN1 13
-#define motorW4_IN2 10
+#define motorW4_IN2 10 //PWM
 #define motorW5_IN1 8
-#define motorW5_IN2 9
+#define motorW5_IN2 9 //PWM
 #define motorW6_IN1 11
-#define motorW6_IN2 12
+#define motorW6_IN2 12 //PWM
 
-ServoEasing servoW1;
-ServoEasing servoW3;
-ServoEasing servoW4;
-ServoEasing servoW6;
-ServoEasing servoCamTilt;
+#define motorW1_SERVO 22
+#define motorW3_SERVO 23
+#define motorW4_SERVO 24
+#define motorW6_SERVO 25
 
-AccelStepper camPanStepper(1, 46, 45);  //(Type:driver, STEP, DIR) - Stepper1
+/*
+* Moves the left-front wheel motor in the forward direction if move_forward is true,
+* otherwise the moter moves backwards.
+*/
+void power_leftfront_wheel(uint8_t power, bool move_forward) {
+  if (move_forward) {
+    analogWrite(motorW1_IN1, power);
+    digitalWrite(motorW1_IN2, LOW);
+  } else {
+    analogWrite(motorW1_IN1, LOW);
+    digitalWrite(motorW1_IN2, power);
+  }
+}
 
-IBusBM IBus;
-IBusBM IBusSensor;
+void power_leftmiddle_wheel(uint8_t power, bool move_forward) {
+  if (move_forward) {
+    analogWrite(motorW2_IN1, power);
+    digitalWrite(motorW2_IN2, LOW);
+  } else {
+    digitalWrite(motorW2_IN1, LOW);
+    analogWrite(motorW2_IN2, power);
+  }
+}
 
-int angle = 0;   // servo position in degrees
-int ch0, ch1, ch2, ch3, ch6 = 0;
-int servo1Angle = 90;
-int servo3Angle = 90;
-int servo4Angle = 90;
-int servo6Angle = 90;
-int s = 0; // rover speed
-int r = 0; // turning radius
-int m1, m2, m3, m4, m5, m6;
-int camTilt = 90;
-int camPan = 0;
-float speed1, speed2, speed3 = 0;
-float speed1PWM, speed2PWM, speed3PWM = 0;
-float thetaInnerFront, thetaInnerBack, thetaOuterFront, thetaOuterBack = 0;
-int incomingByte = 0;
-bool go_forward = false;
+void power_leftback_wheel(uint8_t power, bool move_forward) {
+  if (move_forward) {
+    analogWrite(motorW3_IN1, power);
+    digitalWrite(motorW3_IN2, LOW);
+  } else {
+    digitalWrite(motorW3_IN1, LOW);
+    analogWrite(motorW3_IN2, power);
+  }
+}
 
+void power_rightfront_wheel(uint8_t power, bool move_forward) {
+  // NOTE: the motors on the right side move in the opposite direction
+  if (move_forward) {
+    digitalWrite(motorW4_IN1, LOW);
+    analogWrite(motorW4_IN2, power);
+  } else {
+    analogWrite(motorW4_IN1, power);
+    digitalWrite(motorW4_IN2, LOW);
+  }  
+}
 
-float d1 = 271; // distance in mm
-float d2 = 278;
-float d3 = 301;
-float d4 = 304;
+void power_rightmiddle_wheel(uint8_t power, bool move_forward) {
+  if (move_forward) {
+    digitalWrite(motorW5_IN1, LOW);
+    analogWrite(motorW5_IN2, power);
+  } else {
+    analogWrite(motorW5_IN1, power);
+    digitalWrite(motorW5_IN2, LOW);
+  }  
+}
 
+void power_rightback_wheel(uint8_t power, bool move_forward) {
+  if (move_forward) {
+    digitalWrite(motorW6_IN1, LOW);
+    analogWrite(motorW6_IN2, power);
+  } else {
+    analogWrite(motorW6_IN1, power);
+    digitalWrite(motorW6_IN2, LOW);
+  }  
+}
+
+/*
+* Turns of the left-front motor.
+*/
+void unpower_leftfront_wheel() {
+  digitalWrite(motorW1_IN1, LOW);
+  digitalWrite(motorW1_IN2, LOW);
+}
+
+void unpower_leftmiddle_wheel() {
+  digitalWrite(motorW2_IN1, LOW);
+  digitalWrite(motorW2_IN2, LOW);
+}
+
+void unpower_leftback_wheel() {
+  digitalWrite(motorW3_IN1, LOW);
+  digitalWrite(motorW3_IN2, LOW);
+}
+
+void unpower_rightfront_wheel() {
+  digitalWrite(motorW4_IN1, LOW);
+  digitalWrite(motorW4_IN2, LOW);
+}
+
+void unpower_rightmiddle_wheel() {
+  digitalWrite(motorW5_IN1, LOW);
+  digitalWrite(motorW5_IN2, LOW);
+}
+
+void unpower_rightback_wheel() {
+  digitalWrite(motorW6_IN1, LOW);
+  digitalWrite(motorW6_IN2, LOW);
+}
+
+enum Keys {
+  Space = 32,
+  A = 97,
+  E = 101,
+  D = 100,
+  Q = 113,
+  S = 115,
+  W = 119
+};
+
+enum Direction {
+	Forward, Backward, Left, Right, Clockwise, Counterclockwise, None
+};
+
+void calculateMotorsSpeed(Direction dir);
+void calculateWheelAngles(Direction dir);
+
+Direction dir = Direction::None;
+
+// all in mm
+// distance from the center to the front of the car
+const int CENTER_TO_FRONT_DIST = 301;
+// same but to the back side
+const int CENTER_TO_BACK_DIST = 278;
+// distance from the center to the left of the car (same as to right side)
+const int CENTER_TO_LEFT_DIST = 271; // TODO: rename
+
+// the angle of the wheels when moving in a straight line
+const float STRAIGHT_WHEEL_ANGLE = 90;
+
+// rover speed when moving
+int CRUISE_SPEED = 100;
+// rover speed when rotating in place
+int ROTATION_SPEED = 50;
+
+// rotations per minute
+int SERVO_ROTATION_SPEED = 550;
+// rover speed
+float speed = 0;
+
+// TODO: update in code
+// in mm
+float turning_radius = 1600;
+
+// the servos rotate the front and back wheels
+ServoEasing leftfront_servo;
+ServoEasing leftback_servo;
+ServoEasing rightfront_servo;
+ServoEasing rightback_servo;
+
+float leftfront_wheel_angle = 0;
+float leftback_wheel_angle = 0;
+float rightfront_wheel_angle = 0;
+float rightback_wheel_angle = 0;
+
+float leftfront_wheel_speed = 0;
+float leftmiddle_wheel_speed = 0;
+float leftback_wheel_speed = 0;
+float rightfront_wheel_speed = 0;
+float rightmiddle_wheel_speed = 0;
+float rightback_wheel_speed = 0;
 
 void setup() {
-
   /*
      Use this if you need to change the frequency of the PWM signals
     TCCR4B = TCCR4B & B11111000 | B00000101;     // D6,D7,D8 PWM frequency of 30.64 Hz
@@ -75,321 +196,243 @@ void setup() {
     TCCR5B = TCCR5B & B11111000 | B00000101; // D4, D13 PWM frequency of 30.64 Hz
     TCCR3B = TCCR3B & B11111000 | B00000101;    // D2, D3, D5 PWM frequency of 30.64 Hz
   */
-  Serial.begin(9600);
-  IBus.begin(Serial1, IBUSBM_NOTIMER); // Servo iBUS
-  IBusSensor.begin(Serial2, IBUSBM_NOTIMER); // Sensor iBUS
-
-  IBusSensor.addSensor(IBUSS_INTV); // add voltage sensor
-
-  servoW1.attach(22);
-  servoW3.attach(23);
-  servoW4.attach(24);
-  servoW6.attach(25);
-  servoCamTilt.attach(26);
-
-  servoW1.write(90);
-  servoW3.write(90);
-  servoW4.write(90);
-  servoW6.write(90);
-  servoCamTilt.write(90);
-
-  servoW1.setSpeed(550);
-  servoW3.setSpeed(550);
-  servoW4.setSpeed(550);
-  servoW6.setSpeed(550);
-  servoCamTilt.setSpeed(200);
-
-  camPanStepper.setMaxSpeed(1000);
-  camPan = 0;
-  camTilt = 90;
-
-
+  Serial.begin(115200);
+  
   // DC Motors
-  // Motor Wheel 1 - Left Front
-  digitalWrite(motorW1_IN1, LOW);   // PWM value
-  digitalWrite(motorW1_IN2, LOW); // Forward
-  // Motor Wheel 2 - Left Middle
-  digitalWrite(motorW2_IN1, LOW);
-  digitalWrite(motorW2_IN2, LOW);
-  // Motor Wheel 3 - Left Back
-  digitalWrite(motorW3_IN1, LOW);
-  digitalWrite(motorW3_IN2, LOW);
-  // right side motors move in opposite direction
-  // Motor Wheel 4 - Right Front
-  digitalWrite(motorW4_IN1, LOW);
-  digitalWrite(motorW4_IN2, LOW);
-  // Motor Wheel 5 - Right Middle
-  digitalWrite(motorW5_IN1, LOW);
-  digitalWrite(motorW5_IN2, LOW);
-  // Motor Wheel 6 - Right Back
-  digitalWrite(motorW6_IN1, LOW);
-  digitalWrite(motorW6_IN2, LOW);
+  unpower_leftfront_wheel();
+  unpower_leftmiddle_wheel();
+  unpower_leftback_wheel();
+  unpower_rightfront_wheel();
+  unpower_rightmiddle_wheel();
+  unpower_rightback_wheel();
 
+  // servos
+  leftfront_servo.attach(motorW1_SERVO);
+  leftback_servo.attach(motorW3_SERVO);
+  rightfront_servo.attach(motorW4_SERVO);
+  rightback_servo.attach(motorW6_SERVO);
 
+  leftfront_servo.setSpeed(SERVO_ROTATION_SPEED);
+  leftback_servo.setSpeed(SERVO_ROTATION_SPEED);
+  rightfront_servo.setSpeed(SERVO_ROTATION_SPEED);
+  rightback_servo.setSpeed(SERVO_ROTATION_SPEED);
+
+  // set correct angle
+  leftfront_servo.write(STRAIGHT_WHEEL_ANGLE);
+  leftback_servo.write(STRAIGHT_WHEEL_ANGLE);
+  rightfront_servo.write(STRAIGHT_WHEEL_ANGLE);
+  rightback_servo.write(STRAIGHT_WHEEL_ANGLE);
+  
+  dir = Direction::None;
 }
 
 void loop() {
-  // Reading the data comming from the RC Transmitter
-  IBus.loop();
-  //ch0 = IBus.readChannel(0); //steering
-  ch0 = 1486;
-  ch1 = IBus.readChannel(1); //cam steering
-  //ch2 = IBus.readChannel(2);
-  ch2 = 1300;
-  ch3 = IBus.readChannel(3); //cam steering
-  ch6 = IBus.readChannel(6);
+  // process key input
+  if (Serial.available() > 0) {
+    int key = Serial.read();
 
-  if (Serial.available()>0) {
-    incomingByte = Serial.read();
-    Serial.print("\nI received: ");
-    Serial.print(incomingByte, DEC);
-    Serial.print("\n");
-    Serial.print(s);
-
-    if (incomingByte == 119){
-      go_forward = true;
-    }
-    if (incomingByte == 115){
-      go_forward = false;
-    }
-  }
-
-  // Convertign the incoming data
-  // Steering right
-  if (ch0 > 1515) {
-    r = map(ch0, 1515, 2000, 1400, 600); // turining radius from 1400mm to 600mm
-  }
-  // Steering left
-  else if (ch0 < 1485) {
-    r = map(ch0, 1485, 1000, 1400, 600); // turining radius from 600mm to 1400mm
-  }
-  // Rover speed in % from 0 to 100
-  s = map(ch2, 1000, 2000, 0, 100); // rover speed from 0% to 100%
-  // Camera head steering
-  if (ch1 < 1485 ) {
-    if (camTilt >= 35) {
-      camTilt--;
-      delay(20);
+    switch (key) {
+      case Keys::W:
+        dir = Direction::Forward;
+        break;
+      case Keys::A:
+        dir = Direction::Left;
+        break;
+      case Keys::S:
+        dir = Direction::Backward;
+        break;
+      case Keys::D:
+        dir = Direction::Right;
+        break;
+      case Keys::Q:
+        dir = Direction::Counterclockwise;
+        break;
+      case Keys::E:
+        dir = Direction::Clockwise;
+        break;
+      case Keys::Space:
+        dir = Direction::None;
     }
   }
-  if (ch1 > 1515 ) {
-    if (camTilt <= 165) {
-      camTilt++;
-      delay(20);
-    }
-  }
-  servoCamTilt.startEaseTo(camTilt); // Camera tilt
 
-  if (ch3 >= 1000 && ch3 < 1485) {
-    camPan = map(ch3, 1000, 1485, 400, 0);
+  calculateMotorsSpeed(dir);
+  calculateWheelAngles(dir);
+
+  // rotate wheels
+  leftfront_servo.startEaseTo(leftfront_wheel_angle);
+  leftback_servo.startEaseTo(leftback_wheel_angle);
+  rightfront_servo.startEaseTo(rightfront_wheel_angle);
+  rightback_servo.startEaseTo(rightback_wheel_angle);
+
+  // power DC motors
+  if (dir == Direction::Right) {
+    power_leftfront_wheel(leftfront_wheel_speed, true);
+    power_leftmiddle_wheel(leftmiddle_wheel_speed, true);
+    power_leftback_wheel(leftback_wheel_speed, true);
+    power_rightfront_wheel(rightfront_wheel_speed, true);
+    power_rightmiddle_wheel(rightmiddle_wheel_speed, true);
+    power_rightback_wheel(rightback_wheel_speed, true);
+  }  
+  else if (dir == Direction::Left) {
+    power_leftfront_wheel(leftfront_wheel_speed, true);
+    power_leftmiddle_wheel(leftmiddle_wheel_speed, true);
+    power_leftback_wheel(leftback_wheel_speed, true);
+    power_rightfront_wheel(rightfront_wheel_speed, true);
+    power_rightmiddle_wheel(rightmiddle_wheel_speed, true);
+    power_rightback_wheel(rightback_wheel_speed, true);
+  }  
+	else if (dir == Direction::Forward) {
+    power_leftfront_wheel(leftfront_wheel_speed, true);
+    power_leftmiddle_wheel(leftmiddle_wheel_speed, true);
+    power_leftback_wheel(leftback_wheel_speed, true);
+    power_rightfront_wheel(rightfront_wheel_speed, true);
+    power_rightmiddle_wheel(rightmiddle_wheel_speed, true);
+    power_rightback_wheel(rightback_wheel_speed, true);
+  }  
+  else if (dir == Direction::Backward) {
+    power_leftfront_wheel(leftfront_wheel_speed, false);
+    power_leftmiddle_wheel(leftmiddle_wheel_speed, false);
+    power_leftback_wheel(leftback_wheel_speed, false);
+    power_rightfront_wheel(rightfront_wheel_speed, false);
+    power_rightmiddle_wheel(rightmiddle_wheel_speed, false);
+    power_rightback_wheel(rightback_wheel_speed, false);
   }
-  else if (ch3 > 1515 && ch3 <= 2000) {
-    camPan = map(ch3, 1515, 2000, 0, -400);
+  else if (dir == Direction::Counterclockwise || dir == Direction::Clockwise) {
+    // wait for the servos to stop moving
+    if (!leftfront_servo.isMoving() && !leftback_servo.isMoving() &&
+        !rightfront_servo.isMoving() && !rightback_servo.isMoving())
+    {
+      bool spin_dir = dir == Direction::Counterclockwise;
+
+      // move all wheels forward if moving counterclockwise,
+      //  otherwise move backwards
+      power_leftfront_wheel(speed, spin_dir);
+      power_leftmiddle_wheel(speed, spin_dir);
+      power_leftback_wheel(speed, spin_dir);
+      power_rightfront_wheel(speed, spin_dir);
+      power_rightmiddle_wheel(speed, spin_dir);
+      power_rightback_wheel(speed, spin_dir);
+    }
   }
   else {
-    camPan = 0;
+    unpower_leftfront_wheel();
+    unpower_leftmiddle_wheel();
+    unpower_leftback_wheel();
+    unpower_rightfront_wheel();
+    unpower_rightmiddle_wheel();
+    unpower_rightback_wheel();
   }
-  camPanStepper.setSpeed(camPan);    // Camera pan
-  camPanStepper.run();
+}
 
+/*
+* Computes circumference of a circle with the given radius.
+*/
+float circumference(float radius) {
+  return 2.0 * PI * radius;
+}
 
-  calculateMotorsSpeed();
-  calculateServoAngle();
+float distance(float dx, float dy) {
+  return sqrt(dx * dx + dy * dy);
+}
 
-  // Steer right
-  if (ch0 > 1515) {
-    // Servo motors
-    // Outer wheels
-    servoW1.startEaseTo(97 + thetaInnerFront); // front wheel steer right
-    servoW3.startEaseTo(97 - thetaInnerBack); // back wheel steer left for overall steering to the right of the rover
-    // Inner wheels
-    servoW4.startEaseTo(94 + thetaOuterFront);
-    servoW6.startEaseTo(96 - thetaOuterBack);
-
-    // DC Motors
-    if (incomingByte == 119) { // Move forward ch6<1500
-      // Motor Wheel 1 - Left Front
-      analogWrite(motorW1_IN1, speed1PWM);   // Outer wheels running at speed1 - max speed
-      digitalWrite(motorW1_IN2, LOW);
-      // Motor Wheel 2 - Left Middle
-      analogWrite(motorW2_IN1, speed1PWM);
-      digitalWrite(motorW2_IN2, LOW);
-      // Motor Wheel 3 - Left Back
-      analogWrite(motorW3_IN1, speed1PWM);
-      digitalWrite(motorW3_IN2, LOW);
-      // right side motors move in opposite direction
-      // Motor Wheel 4 - Right Front
-      digitalWrite(motorW4_IN1, LOW);
-      analogWrite(motorW4_IN2, speed2PWM); // Inner front wheel running at speed2 - lower speed
-      // Motor Wheel 5 - Right Middle
-      digitalWrite(motorW5_IN1, LOW);
-      analogWrite(motorW5_IN2, speed3PWM); // Inner middle wheel running at speed3 - lowest speed
-      // Motor Wheel 6 - Right Back
-      digitalWrite(motorW6_IN1, LOW);
-      analogWrite(motorW6_IN2, speed2PWM); // Inner back wheel running at speed2 - lower speed
-    }
-    else if (incomingByte == 115) { //ch6 > 1500
-      // Motor Wheel 1 - Left Front
-      digitalWrite(motorW1_IN1, LOW);   // Outer wheels running at speed1 - max speed
-      analogWrite(motorW1_IN2, speed1PWM);
-      // Motor Wheel 2 - Left Middle
-      digitalWrite(motorW2_IN1, LOW);
-      analogWrite(motorW2_IN2, speed1PWM);
-      // Motor Wheel 3 - Left Back
-      digitalWrite(motorW3_IN1, LOW);
-      analogWrite(motorW3_IN2, speed1PWM);
-      // right side motors move in opposite direction
-      // Motor Wheel 4 - Right Front
-      analogWrite(motorW4_IN1, speed2PWM);
-      digitalWrite(motorW4_IN2, LOW); // Inner front wheel running at speed2 - lower speed
-      // Motor Wheel 5 - Right Middle
-      analogWrite(motorW5_IN1, speed3PWM);
-      digitalWrite(motorW5_IN2, LOW); // Inner middle wheel running at speed3 - lowest speed
-      // Motor Wheel 6 - Right Back
-      analogWrite(motorW6_IN1, speed2PWM);
-      digitalWrite(motorW6_IN2, LOW); // Inner back wheel running at speed2 - lower speed
-    }
+void calculateMotorsSpeed(Direction dir) {
+  if (dir == Direction::Forward || dir == Direction::Backward) {
+    leftfront_wheel_speed = leftmiddle_wheel_speed = leftback_wheel_speed = 
+      rightfront_wheel_speed = rightmiddle_wheel_speed = rightback_wheel_speed = CRUISE_SPEED;
   }
+  else if (dir == Direction::Counterclockwise || dir == Direction::Clockwise) {
+    leftfront_wheel_speed = leftmiddle_wheel_speed = leftback_wheel_speed = 
+      rightfront_wheel_speed = rightmiddle_wheel_speed = rightback_wheel_speed = ROTATION_SPEED;
+  }
+  else if (dir == Direction::Left || dir == Direction::Right) {
+    // inner-front wheel circumference of the circle around the turning center, repeat for all wheels
+    float ifw_circum = circumference(distance(turning_radius - CENTER_TO_LEFT_DIST, CENTER_TO_FRONT_DIST));
+    float imw_circum = circumference(turning_radius - CENTER_TO_LEFT_DIST);
+    float ibw_circum = circumference(distance(turning_radius - CENTER_TO_LEFT_DIST, CENTER_TO_BACK_DIST));
+    // outer wheels (front, middle and back)
+    float ofw_circum = circumference(distance(turning_radius + CENTER_TO_LEFT_DIST, CENTER_TO_FRONT_DIST));
+    float omw_circum = circumference(turning_radius + CENTER_TO_LEFT_DIST);
+    float obw_circum = circumference(distance(turning_radius + CENTER_TO_LEFT_DIST, CENTER_TO_BACK_DIST));
 
-  // Steer left
-  else if (ch0 < 1485) {
-    // Servo motors
-    servoW1.startEaseTo(97 - thetaOuterFront);
-    servoW3.startEaseTo(97 + thetaOuterBack);
-    servoW4.startEaseTo(94 - thetaInnerFront);
-    servoW6.startEaseTo(96 + thetaInnerBack);
+    // the outer middle wheel is always the farthest away from the turning center, so we set it equal to the cruise speed
+    float outermiddle_wheel_speed = CRUISE_SPEED;
 
-    // DC Motors
-    if (ch6 < 1500) { // Move forward
-      // Motor Wheel 1 - Left Front
-      analogWrite(motorW1_IN1, speed2PWM);   // PWM value
-      digitalWrite(motorW1_IN2, LOW); // Forward
-      // Motor Wheel 2 - Left Middle
-      analogWrite(motorW2_IN1, speed3PWM);
-      digitalWrite(motorW2_IN2, LOW);
-      // Motor Wheel 3 - Left Back
-      analogWrite(motorW3_IN1, speed2PWM);
-      digitalWrite(motorW3_IN2, LOW);
-      // Motor Wheel 4 - Right Front
-      // right side motors move in opposite direction
-      digitalWrite(motorW4_IN1, LOW);
-      analogWrite(motorW4_IN2, speed1PWM);
-      // Motor Wheel 5 - Right Middle
-      digitalWrite(motorW5_IN1, LOW);
-      analogWrite(motorW5_IN2, speed1PWM);
-      // Motor Wheel 6 - Right Back
-      digitalWrite(motorW6_IN1, LOW);
-      analogWrite(motorW6_IN2, speed1PWM);
-    }
-    else if (ch6 > 1500) { // Move backward
-      // Motor Wheel 1 - Left Front
-      digitalWrite(motorW1_IN1, LOW);   // PWM value
-      analogWrite(motorW1_IN2, speed2PWM); // Forward
-      // Motor Wheel 2 - Left Middle
-      digitalWrite(motorW2_IN1, LOW);
-      analogWrite(motorW2_IN2, speed3PWM);
-      // Motor Wheel 3 - Left Back
-      digitalWrite(motorW3_IN1, LOW);
-      analogWrite(motorW3_IN2, speed2PWM);
-      // Motor Wheel 4 - Right Front
-      // right side motors move in opposite direction
-      analogWrite(motorW4_IN1, speed1PWM);
-      digitalWrite(motorW4_IN2, LOW);
-      // Motor Wheel 5 - Right Middle
-      analogWrite(motorW5_IN1, speed1PWM);
-      digitalWrite(motorW5_IN2, LOW);
-      // Motor Wheel 6 - Right Back
-      analogWrite(motorW6_IN1, speed1PWM);
-      digitalWrite(motorW6_IN2, LOW);
+    // We want every wheel to travel the same distance in the same time, i.e. to travel the circumference of their circle
+    //  with the turning center in the middle in the same time. When turning, every wheel has a different speed, so
+    //  we compute a different speed for each wheel, all relative to the fastest moving wheel (the outer middle wheel,
+    //  because it is farthest away from the turning center).
+    float innerfront_wheel_speed = ifw_circum / omw_circum * outermiddle_wheel_speed;
+    float innermiddle_wheel_speed = imw_circum / omw_circum * outermiddle_wheel_speed;
+    float innerback_wheel_speed = ibw_circum / omw_circum * outermiddle_wheel_speed;
+    
+    float outerfront_wheel_speed = ofw_circum / omw_circum * outermiddle_wheel_speed;
+    float outerback_wheel_speed = obw_circum / omw_circum * outermiddle_wheel_speed;
+
+    if (dir == Direction::Left) {
+      leftfront_wheel_speed = innerfront_wheel_speed;
+      leftmiddle_wheel_speed = innermiddle_wheel_speed;
+      leftback_wheel_speed = innerback_wheel_speed;
+      
+      rightfront_wheel_speed = outerfront_wheel_speed;
+      rightmiddle_wheel_speed = outermiddle_wheel_speed;
+      rightback_wheel_speed = outerback_wheel_speed;
+    } else if (dir == Direction::Right) {
+      leftfront_wheel_speed = outerfront_wheel_speed;
+      leftmiddle_wheel_speed = outermiddle_wheel_speed;
+      leftback_wheel_speed = outerback_wheel_speed;
+      
+      rightfront_wheel_speed = innerfront_wheel_speed;
+      rightmiddle_wheel_speed = innermiddle_wheel_speed;
+      rightback_wheel_speed = innerback_wheel_speed;
     }
   }
+}
 
-  // Move straight
+// TODO: cache or make constants of atan computations
+/*
+* Calculate wheel angles for the given movement direction
+* based on Ackerman steering geometry.
+* Rotations are assumed to go counterclockwise.
+*/
+void calculateWheelAngles(Direction dir) {
+  if (dir == Direction::Left || dir == Direction::Right) {
+    // do the necessary Ackerman trigonometry, i.e.
+    //  rotate the wheels such that they align a circle
+    //  around the turning center
+    float innerfront_wheel_angle = STRAIGHT_WHEEL_ANGLE + atan(CENTER_TO_FRONT_DIST / (turning_radius - CENTER_TO_LEFT_DIST)) * 180 / PI;
+    float innerback_wheel_angle = STRAIGHT_WHEEL_ANGLE - atan(CENTER_TO_BACK_DIST / (turning_radius - CENTER_TO_LEFT_DIST)) * 180 / PI;
+
+    float outerfront_wheel_angle = STRAIGHT_WHEEL_ANGLE + atan(CENTER_TO_FRONT_DIST / (turning_radius + CENTER_TO_LEFT_DIST)) * 180 / PI;
+    float outerback_wheel_angle = STRAIGHT_WHEEL_ANGLE - atan(CENTER_TO_BACK_DIST / (turning_radius + CENTER_TO_LEFT_DIST)) * 180 / PI;
+
+    if (dir == Direction::Left) {
+      leftfront_wheel_angle = innerfront_wheel_angle;
+      leftback_wheel_angle = innerback_wheel_angle;
+      
+      rightfront_wheel_angle = outerfront_wheel_angle;
+      rightback_wheel_angle = outerback_wheel_angle;
+    } else if (dir == Direction::Right) {
+      leftfront_wheel_angle = outerfront_wheel_angle;
+      leftback_wheel_angle = outerback_wheel_angle;
+      
+      rightfront_wheel_angle = innerfront_wheel_angle;
+      rightback_wheel_angle = innerback_wheel_angle;
+    }
+  } else if (dir == Direction::Counterclockwise || dir == Direction::Clockwise) {
+    // rotate the wheels such that they align the circle around the center of the car
+    leftfront_wheel_angle = STRAIGHT_WHEEL_ANGLE - atan(CENTER_TO_LEFT_DIST / CENTER_TO_FRONT_DIST) * 180 / PI;
+    leftback_wheel_angle = STRAIGHT_WHEEL_ANGLE + atan(CENTER_TO_LEFT_DIST / CENTER_TO_BACK_DIST) * 180 / PI;
+
+    rightfront_wheel_angle = STRAIGHT_WHEEL_ANGLE + atan(CENTER_TO_LEFT_DIST / CENTER_TO_FRONT_DIST) * 180 / PI - 180;
+    rightback_wheel_angle = STRAIGHT_WHEEL_ANGLE - atan(CENTER_TO_LEFT_DIST / CENTER_TO_BACK_DIST) * 180 / PI + 180;
+  }
   else {
-    servoW1.startEaseTo(97);
-    servoW3.startEaseTo(97);
-    servoW4.startEaseTo(94);
-    servoW6.startEaseTo(96);
-
-    // DC Motors
-    if (go_forward) {
-      // Motor Wheel 1 - Left Front
-      analogWrite(motorW1_IN1, speed1PWM);  // all wheels move at the same speed
-      digitalWrite(motorW1_IN2, LOW); // Forward
-      // Motor Wheel 2 - Left Middle
-      analogWrite(motorW2_IN1, speed1PWM);
-      digitalWrite(motorW2_IN2, LOW);
-      // Motor Wheel 3 - Left Back
-      analogWrite(motorW3_IN1, speed1PWM);
-      digitalWrite(motorW3_IN2, LOW);
-      // right side motors move in opposite direction
-      // Motor Wheel 4 - Right Front
-      digitalWrite(motorW4_IN1, LOW);
-      analogWrite(motorW4_IN2, speed1PWM);
-      // Motor Wheel 5 - Right Middle
-      digitalWrite(motorW5_IN1, LOW);
-      analogWrite(motorW5_IN2, speed1PWM);
-      // Motor Wheel 6 - Right Back
-      digitalWrite(motorW6_IN1, LOW);
-      analogWrite(motorW6_IN2, speed1PWM);
-    }
-    else if (false) {
-      // Motor Wheel 1 - Left Front
-      digitalWrite(motorW1_IN1, LOW);  // all wheels move at the same speed
-      analogWrite(motorW1_IN2, speed1PWM); // Forward
-      // Motor Wheel 2 - Left Middle
-      digitalWrite(motorW2_IN1, LOW);
-      analogWrite(motorW2_IN2, speed1PWM);
-      // Motor Wheel 3 - Left Back
-      digitalWrite(motorW3_IN1, LOW);
-      analogWrite(motorW3_IN2, speed1PWM);
-      // right side motors move in opposite direction
-      // Motor Wheel 4 - Right Front
-      analogWrite(motorW4_IN1, speed1PWM);
-      digitalWrite(motorW4_IN2, LOW);
-      // Motor Wheel 5 - Right Middle
-      analogWrite(motorW5_IN1, speed1PWM);
-      digitalWrite(motorW5_IN2, LOW);
-      // Motor Wheel 6 - Right Back
-      analogWrite(motorW6_IN1, speed1PWM);
-      digitalWrite(motorW6_IN2, LOW);
-    }
+    leftfront_wheel_angle = STRAIGHT_WHEEL_ANGLE;
+    leftback_wheel_angle = STRAIGHT_WHEEL_ANGLE;
+    rightfront_wheel_angle = STRAIGHT_WHEEL_ANGLE;
+    rightback_wheel_angle = STRAIGHT_WHEEL_ANGLE;
   }
-  // Monitor the battery voltage
-  int sensorValue = analogRead(A0);
-  float voltage = sensorValue * (5.00 / 1023.00) * 3.02; // Convert the reading values from 5v to suitable 12V
-  // Send battery voltage value to transmitter
-  IBusSensor.loop();
-  IBusSensor.setSensorMeasurement(1, voltage * 100);
 }
 
-void calculateMotorsSpeed() {
-  // if no steering, all wheels speed is the same - straight move
-  if (ch0 > 1485 && ch0 < 1515) {
-    speed1 = speed2 = speed3 = s;
-  }
-  // when steering, wheels speed depend on the turning radius value
-  else {
-    // Outer wheels, furthest wheels from turning point, have max speed
-    // Due to the rover geometry, all three outer wheels should rotate almost with the same speed. They differe only 1% so we asume they are the same.
-    speed1 = s;
-    // Inner front and back wheels are closer to the turing point and have lower speeds compared to the outer speeds
-    speed2 = s * sqrt(pow(d3, 2) + pow((r - d1), 2)) / (r + d4);
-    // Inner middle wheel is closest to the turning point, has the lowest speed
-    speed3 = s * (r - d4) / (r + d4);
-  }
 
-  // speed value from 0 to 100% to PWM value from 0 to 255
-  speed1PWM = map(round(speed1), 0, 100, 0, 255);
-  speed2PWM = map(round(speed2), 0, 100, 0, 255);
-  speed3PWM = map(round(speed3), 0, 100, 0, 255);
-}
 
-void calculateServoAngle() {
-  // Calculate the angle for each servo for the input turning radius "r"
-  thetaInnerFront = round((atan((d3 / (r + d1)))) * 180 / PI);
-  thetaInnerBack = round((atan((d2 / (r + d1)))) * 180 / PI);
-  thetaOuterFront = round((atan((d3 / (r - d1)))) * 180 / PI);
-  thetaOuterBack = round((atan((d2 / (r - d1)))) * 180 / PI);
-
-}
