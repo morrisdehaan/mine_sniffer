@@ -1,6 +1,8 @@
 #include <Servo.h>
 #include <ServoEasing.hpp>
 
+// TODO: when spinning in place: first halt (<-- new one), then rotate servo's, then turn?
+
 /*
  *    Mine Sniffer Arduino Code
  * 
@@ -15,15 +17,15 @@
 #define motorW2_IN2 5 //PWM
 #define motorW3_IN1 2
 #define motorW3_IN2 3 //PWM
-#define motorW4_IN1 13
-#define motorW4_IN2 10 //PWM
+#define motorW4_IN1 10
+#define motorW4_IN2 13 //PWM
 #define motorW5_IN1 8
 #define motorW5_IN2 9 //PWM
 #define motorW6_IN1 11
 #define motorW6_IN2 12 //PWM
 
 #define motorW1_SERVO 22
-#define motorW3_SERVO 23
+#define motorW3_SERVO 26
 #define motorW4_SERVO 24
 #define motorW6_SERVO 25
 
@@ -178,7 +180,7 @@ void setup() {
     TCCR5B = TCCR5B & B11111000 | B00000101; // D4, D13 PWM frequency of 30.64 Hz
     TCCR3B = TCCR3B & B11111000 | B00000101;    // D2, D3, D5 PWM frequency of 30.64 Hz
   */
-  Serial.begin(115200);
+  Serial.begin(115200); // TODO: overkill
   
   // DC Motors
   unpowerLeftWheels();
@@ -329,22 +331,25 @@ void computeMotorsSpeed(Direction dir) {
 /*
 * Calculate wheel angles for the given movement direction
 * based on Ackerman steering geometry.
+*
+* It's assumed that all leftside servos spin clockwise.
 */
 void computeWheelAngles(Direction dir) {
   if (dir == Direction::Left || dir == Direction::Right || dir == Direction::Counterclockwise || dir == Direction::Clockwise) {
+    // do the necessary Ackerman trigonometry, i.e.
+    //  rotate the wheels such that they align a circle
+    //  around the turning center
     float turning_radius;
     if (dir == Direction::Left) turning_radius = turn_radius;
     else if (dir == Direction::Right) turning_radius = -turn_radius;
     else turning_radius = 0.0;
 
-    // do the necessary Ackerman trigonometry, i.e.
-    //  rotate the wheels such that they align a circle
-    //  around the turning center
-    leftfront_wheel_angle = STRAIGHT_WHEEL_ANGLE + atan((double)CENTER_TO_FRONT_DIST / (double)(turning_radius - HALF_WIDTH)) * 180.0 / PI;
-    leftback_wheel_angle = STRAIGHT_WHEEL_ANGLE - atan((double)CENTER_TO_BACK_DIST / (double)(turning_radius - HALF_WIDTH)) * 180.0 / PI;
+    // turn clockwise
+    leftfront_wheel_angle = STRAIGHT_WHEEL_ANGLE - atan((double)CENTER_TO_FRONT_DIST / (double)(turning_radius - HALF_WIDTH)) * 180.0 / PI;
+    leftback_wheel_angle = STRAIGHT_WHEEL_ANGLE + atan((double)CENTER_TO_BACK_DIST / (double)(turning_radius - HALF_WIDTH)) * 180.0 / PI;
 
-    rightfront_wheel_angle = STRAIGHT_WHEEL_ANGLE + atan((double)CENTER_TO_FRONT_DIST / (double)(turning_radius + HALF_WIDTH)) * 180.0 / PI;
-    rightback_wheel_angle = STRAIGHT_WHEEL_ANGLE - atan((double)CENTER_TO_BACK_DIST / (double)(turning_radius + HALF_WIDTH)) * 180.0 / PI;
+    rightfront_wheel_angle = STRAIGHT_WHEEL_ANGLE - atan((double)CENTER_TO_FRONT_DIST / (double)(turning_radius + HALF_WIDTH)) * 180.0 / PI;
+    rightback_wheel_angle = STRAIGHT_WHEEL_ANGLE + atan((double)CENTER_TO_BACK_DIST / (double)(turning_radius + HALF_WIDTH)) * 180.0 / PI;
   } else {
     leftfront_wheel_angle = STRAIGHT_WHEEL_ANGLE;
     leftback_wheel_angle = STRAIGHT_WHEEL_ANGLE;
@@ -389,7 +394,7 @@ void powerWheelMotors(Direction dir) {
 }
 
 /*
-* Returns `true` if any of the wheels operated by the servos are still rottaing.
+* Returns `true` if any of the wheels operated by the servos are still rotating.
 */
 bool areWheelsRotating() {
   return leftfront_servo.isMoving() || leftback_servo.isMoving() || rightfront_servo.isMoving() || rightback_servo.isMoving();
