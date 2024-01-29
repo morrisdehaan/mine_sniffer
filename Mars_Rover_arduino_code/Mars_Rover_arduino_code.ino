@@ -17,15 +17,15 @@
 #define motorW2_IN2 5 //PWM
 #define motorW3_IN1 2
 #define motorW3_IN2 3 //PWM
-#define motorW4_IN1 10
-#define motorW4_IN2 13 //PWM
+#define motorW4_IN1 13
+#define motorW4_IN2 10 //PWM
 #define motorW5_IN1 8
 #define motorW5_IN2 9 //PWM
 #define motorW6_IN1 11
 #define motorW6_IN2 12 //PWM
 
 #define motorW1_SERVO 22
-#define motorW3_SERVO 26
+#define motorW3_SERVO 23
 #define motorW4_SERVO 24
 #define motorW6_SERVO 25
 
@@ -72,7 +72,7 @@ float speed = 0;
 
 // TODO: update in code
 // in mm
-float turn_radius = 1600;
+float turn_radius = 800;
 
 // the servos rotate the front and back wheels
 ServoEasing leftfront_servo;
