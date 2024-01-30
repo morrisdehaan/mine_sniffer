@@ -10,6 +10,7 @@ TRIG_PINS = [20, 26, 19, 6, 7,    8, 14, 18, 27, 23]
 ECHO_PINS = [21, 16, 13, 12, 1,   4, 15, 17, 22, 24]
 
 def init():
+    GPIO.setmode(GPIO.BCM)
     for pin in TRIG_PINS:
         GPIO.setup(pin, GPIO.OUT)
     for pin in ECHO_PINS:
