@@ -1,5 +1,5 @@
 import time
-import sensor.consts
+import sensor.shared
 import RPi.GPIO as GPIO
 
 # cm/s
