@@ -4,7 +4,6 @@ Main base code.
 
 import socket
 import interface
-import time
 import keyboard as kb
 import control.controller as controller
 

@@ -2,6 +2,8 @@
 Main rover code.
 """
 
+# TODO: mark raspberry and base station os code
+
 import subprocess
 import socket
 import time
@@ -12,8 +14,8 @@ import interface
 from sensor.metal import MetalDetector
 import base
 import control.controller as controller
-
-PACKAGE_HEADER_SIZE = 4
+import sensor.sonar as sonar
+import shared
 
 METAL_ARDUINO_PORT = "/dev/ttyUSB0" # "COM4"
 METAL_ARDUINO_BAUD = 9600
@@ -76,6 +78,7 @@ if __name__ == "__main__":
 
         # measure sensor input
         metal = sensors.metal.detect()
+        sonar_dists = sonar.measure()
 
         # detect mines
         # ..
@@ -88,10 +91,11 @@ if __name__ == "__main__":
 
         # send data to base
         data = {
-            "metal": metal
+            "metal": metal,
+            "sonar": sonar_dists
         }
         bytes = json.dumps(data).encode("utf-8")
-        header = len(bytes).to_bytes(PACKAGE_HEADER_SIZE, "little")
+        header = len(bytes).to_bytes(shared.ROVER_MSG_HEADER_SIZE, "little")
         client.send(header + bytes)
 
         time.sleep(0.01) # TODO: weg?

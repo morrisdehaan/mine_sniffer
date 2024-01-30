@@ -7,10 +7,8 @@ from typing import Optional, Tuple
 import json
 from dataclasses import dataclass
 import tkinter as tk
-import sensor.sensors as sensors
-import sensor.sonar as sonar
+import sensor.shared
 import sensor.metal as metal
-import rover
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
@@ -37,11 +35,11 @@ class InterfaceUpdatePacket:
     ircam: Optional[list[float]]
 
     # positions rover has visited
-    path: list[sensors.Coord]
+    path: list[sensor.shared.Coord]
     # detected mines
-    mines: list[sensors.Coord]
+    mines: list[sensor.shared.Coord]
     # predicted mines
-    pmines: list[sensors.Coord]
+    pmines: list[sensor.shared.Coord]
 
 def parse_packet(bytes: bytes) -> Optional[InterfaceUpdatePacket]:
     if len(bytes) > 0: # TODO: does this not mean that client disconnected?
@@ -162,13 +160,13 @@ class Interface:
         sonar_title.pack(pady=FRAME_BORDER_WIDTH + 2)
 
         # initialize sonars
-        self.sonar_dists = [0.0] * sonar.SONAR_COUNT
+        self.sonar_dists = [0.0] * sensor.shared.SONAR_COUNT
         self.sonar_labels = []
         self.sonar_lasers = []
 
         sonar_idx = 0
-        for i in range(sonar.SONAR_BLOCK_COUNT):
-            angle = sonar.SONAR_BLOCK_ANGLE / float(sonar.SONAR_BLOCK_COUNT) * i
+        for i in range(sensor.shared.SONAR_BLOCK_COUNT):
+            angle = sensor.shared.SONAR_BLOCK_ANGLE / float(sensor.shared.SONAR_BLOCK_COUNT) * i
             x = math.cos(angle) * SONAR_BLOCK_RADIUS
             y = -math.sin(angle) * SONAR_BLOCK_RADIUS + SONAR_Y_OFFSET
 
@@ -268,8 +266,8 @@ class Interface:
         framew, frameh = self.sonar_frame.winfo_width(), self.sonar_frame.winfo_height()
 
         sonar_idx = 0
-        for i in range(sonar.SONAR_BLOCK_COUNT):
-            angle = sonar.SONAR_BLOCK_ANGLE / float(sonar.SONAR_BLOCK_COUNT) * i
+        for i in range(sensor.shared.SONAR_BLOCK_COUNT):
+            angle = sensor.shared.SONAR_BLOCK_ANGLE / float(sensor.shared.SONAR_BLOCK_COUNT) * i
             c, s = math.cos(angle), math.sin(angle)
             x = c * SONAR_BLOCK_RADIUS
             y = -s * SONAR_BLOCK_RADIUS + SONAR_Y_OFFSET
@@ -345,7 +343,7 @@ if __name__ == "__main__":
         if now - last_data_update_time > 0.1:
             sensor_data = InterfaceUpdatePacket(
                 metal=[(int(math.cos(now * 5) * 100), now)] * metal.METAL_DETECTOR_COUNT,
-                sonar=[50.0 + math.sin(now) * 20] * sonar.SONAR_COUNT,
+                sonar=[50.0 + math.sin(now) * 20] * sensor.shared.SONAR_COUNT,
                 ircam=None, path=None, mines=None, pmines=None
             )
             last_data_update_time = now

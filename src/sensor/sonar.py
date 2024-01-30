@@ -1,56 +1,49 @@
 import time
-#import RPi.GPIO as GPIO
-
-# TODO: use code on raspberry
-SONAR_COUNT = 10
-# number of sonars on the left or right side
-SONAR_BLOCK_COUNT = 5
-# maximum distance measured by sonars in meters
-MAX_SONAR_DIST = 10.0
-# angle that the sonars on the left or right side cover
-SONAR_BLOCK_ANGLE = 2.09 # TODO: measure actual angle
-
-class Sonar:
-    def __init__(self):
-        self.__trig_pins = []
-        
-        # distances in centimeters
-        self.dists = []
-        # TODO
-
-    def update(self):
-        pass
+import sensor.consts
+import RPi.GPIO as GPIO
 
 # cm/s
 SOUND_SPEED = 34300
 
+# first 5 left side sonars, then right side
+TRIG_PINS = [20, 26, 19, 6, 7,    8, 14, 18, 27, 23]
+ECHO_PINS = [21, 16, 13, 12, 1,   4, 15, 17, 22, 24]
 
-# if __name__ == "__main__":
-#     pins = [25, 27, 22, 23, 24]
+def init():
+    for pin in TRIG_PINS:
+        GPIO.setup(pin, GPIO.OUT)
+    for pin in ECHO_PINS:
+        GPIO.setup(pin, GPIO.IN)
 
-#     GPIO.setmode(GPIO.BCM)
-#     for pin in pins:
-#         GPIO.setup(pin, GPIO.OUT)
+# TODO: might want to run async as this might take a while
+def measure():
+    dists = []
+    for trig, echo in zip(TRIG_PINS, ECHO_PINS):
+        # trigger sonar
+        GPIO.output(trig, True)
+        time.sleep(0.000001)
+        GPIO.output(trig, False)
 
-#     while True:
-#         for pin in pins:
-#             # trigger sonar
-#             GPIO.output(pin, True)
-#             time.sleep(0.00001)
-#             GPIO.output(pin, False)
+        # measure response time
+        start = time.time()
+        no_response = False
+        while GPIO.input(echo) == 0:
+            now = time.time()
+            if now - start > 0.2:
+                # cancel if it takes too long
+                no_response = True
+                break
 
-#             # measure response time
-#             while GPIO.input(pin) == 0:
-#                 pass
+        if not no_response:
+            start = time.time()
+            while GPIO.input(echo) == 1:
+                # TODO: terminate if it takes too long
+                pass
+            end = time.time()
 
-#             start = time.time()
-#             while GPIO.input(pin) == 1:
-#                 pass
-#             end = time.time()
+            # compute distance, divide by 2 as signal moves to and fro
+            dist = (end - start) * SOUND_SPEED / 2
+        else:
+            dist = float('inf')
 
-#             # compute distance, divide by 2 as signal moves to and fro
-#             dist = (end - start) * SOUND_SPEED / 2
-#             print(f"{dist}cm")
-
-#         print()
-#         time.sleep(0.2)
+        dists.append(dist)

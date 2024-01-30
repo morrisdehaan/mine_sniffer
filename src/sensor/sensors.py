@@ -1,21 +1,12 @@
 from typing import NamedTuple
-from dataclasses import dataclass
 from sensor.metal import MetalDetector
+import sensor.sonar as sonar
 #from sensor.ircam import IRCam # TODO
 
-# TODO: define elsewhere
-class Coord(NamedTuple):
-    lat: float
-    long: float
-
-# sensor readings
-@dataclass
-class SensorData:
-    sonar: list[float]
-    metal: list[float]
-    ircam: list[float]
-    coord: Coord
-
-@dataclass
 class Sensors:
-    metal: MetalDetector
+    """ Initializes all sensors (including sonar). """
+    def __init__(self, metal=MetalDetector):
+        self.metal = metal
+
+        sonar.init()
+
