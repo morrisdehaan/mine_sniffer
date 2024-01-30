@@ -9,16 +9,15 @@ METAL_DETECTOR_COUNT = 3
 BYTES_PER_DETECTOR = 4
 BYTES_PER_BATCH = METAL_DETECTOR_COUNT * BYTES_PER_DETECTOR
 
-SERIAL_PORT = "COM4" # TODO: fix
-
 # separation character between samples
 SAMPLE_SEP = "\n"
 # separation character between detectors
 DETECTOR_SEP = " "
 
 class MetalDetector:
-    def __init__(self):
-        self.usb = serial.Serial(port=SERIAL_PORT, baudrate=9600, timeout=0.0)
+    # TODO: port as input
+    def __init__(self, serial_port: str, baudrate: int):
+        self.serial = serial.Serial(serial_port, baudrate)
 
         # used for collecting bits of sensory data
         self.data = ""
@@ -26,7 +25,7 @@ class MetalDetector:
     """ Returns the reading for each metal detector if available. """
     def detect(self) -> Optional[list[Tuple[int, float]]]:
         # take last reading
-        bytes = self.usb.read_all()
+        bytes = self.serial.read_all()
 
         if len(bytes) > 0:
             data = bytes.decode("utf-8")
