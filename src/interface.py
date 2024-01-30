@@ -25,7 +25,7 @@ PLOT_SIZE = (2.5, 2.5)
 
 METAL_PLOT_SAMPLES = 50 # TODO?
 # 
-METAL_PLOT_WINDOW = 4
+METAL_PLOT_WINDOW = 10
 
 # TODO: make members optional
 @dataclass
@@ -135,6 +135,7 @@ class Interface:
             # build plot
             fig, ax = plt.subplots()
             ax.set_xlim((-METAL_PLOT_WINDOW, 0))
+            ax.set_yticklabels([])
 
             fig.set_facecolor("salmon")
             ax.set_facecolor((0.8, 0.8, 1.0, 0.3))
@@ -207,8 +208,8 @@ class Interface:
         now = time.time()
         
         # repeat for each detector
+        miny, maxy = 5000, -5000 # TODO
         for n in range(metal.METAL_DETECTOR_COUNT):
-            fig, ax, line, bg_cache = self.metal_plots[n]
             samples, times = self.metal_samples[n], self.metal_samples_times[n]
 
             # add new data point
@@ -222,10 +223,18 @@ class Interface:
                     samples.pop(i)
                     times.pop(i)
 
+            if len(samples) > 0:
+                miny = min([miny, min(samples)])
+                maxy = max([maxy, max(samples)])
+
+        for n in range(metal.METAL_DETECTOR_COUNT):
+            fig, ax, line, bg_cache = self.metal_plots[n]
+            samples = self.metal_samples[n]
+
             # load new data points
             line.set_data([t - now for t in times], samples)
-            # rescale axes # TODO have same limits for all graphs
-            ax.relim()
+            # rescale axes
+            ax.set_ylim(miny, maxy)
             ax.autoscale_view(scalex=False)
             
             # TODO: add blit comments

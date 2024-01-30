@@ -22,6 +22,7 @@ AUTO_CONTROL_MSG = b"auto"
 
 def send_msg(conn: socket.socket, msg: bytes):
     header = len(msg).to_bytes(MSG_HEADER_SIZE, byteorder="little")
+
     conn.send(header + msg)
 
 if __name__ == "__main__":
@@ -41,31 +42,41 @@ if __name__ == "__main__":
     server.listen(1)
 
     print("Waiting for rover to connect...")
-    rover_conn, rover_addr = server.accept() # TODO: make quitable if this does not happen..
-    print(f"Rover connected from {rover_addr}!")
+    rover_conn, rover_addr = None, None
+    update = None
 
+    rover_connected = False
     server.setblocking(False)
-    while True:
-        try:
-            bytes = rover_conn.recv(MAX_PACKAGE_BYTES)
-            update = interface.parse_packet(bytes)
-        except socket.timeout:
-            update = None
 
+    while True:
         control_switch = itf.update(update)
 
-        if control_switch:
-            if itf.manual_control_requested():
-                send_msg(rover_conn, MANUAL_CONTROL_MSG)
-            else:
-                send_msg(rover_conn, AUTO_CONTROL_MSG)
+        if not rover_connected:
+            try:
+                rover_conn, rover_addr = server.accept()
+                rover_connected = True
+                print(f"Rover connected from {rover_addr}!")
+            except:
+                continue                    
+        else:
+            try:
+                bytes = rover_conn.recv(MAX_PACKAGE_BYTES)
+                update = interface.parse_packet(bytes)
+            except: # TODO:
+                update = None
 
-        if itf.manual_control_requested():
-            # send user control
-            for cmd in controller.VALID_CMDS:
-                if kb.is_pressed(cmd):
-                    send_msg(rover_conn, cmd)
-                    break
+            if control_switch:
+                if itf.manual_control_requested():
+                    send_msg(rover_conn, MANUAL_CONTROL_MSG)
+                else:
+                    send_msg(rover_conn, AUTO_CONTROL_MSG)
+
+            if itf.manual_control_requested():
+                # send user control
+                for cmd in controller.VALID_CMDS:
+                    if kb.is_pressed(cmd):
+                        send_msg(rover_conn, cmd.encode("utf-8"))
+                        break
 
         # kill switch
         if kb.is_pressed("-"):

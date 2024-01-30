@@ -15,9 +15,9 @@ import control.controller as controller
 
 PACKAGE_HEADER_SIZE = 4
 
-METAL_ARDUINO_PORT = "COM4"
+METAL_ARDUINO_PORT = "/dev/ttyUSB0" # "COM4"
 METAL_ARDUINO_BAUD = 9600
-MOTOR_ARDUINO_PORT = "COM5"
+MOTOR_ARDUINO_PORT = "/dev/ttyACM0" # "COM5"
 MOTOR_ARDUINO_BAUD = 115200
 
 """ Parsed message into separate commands. """
@@ -25,7 +25,7 @@ def parse_msg(msg: bytes) -> list[bytes]:
     cmds = []
     i = 0
     while i < len(msg):
-        size = msg[i:i+base.MSG_HEADER_SIZE]
+        size = int.from_bytes(msg[i:i+base.MSG_HEADER_SIZE], "little")
         cmds.append(msg[i+base.MSG_HEADER_SIZE:i+base.MSG_HEADER_SIZE+size])
         i += base.MSG_HEADER_SIZE + size
     return cmds
@@ -35,7 +35,8 @@ if __name__ == "__main__":
     RTK_SOLUTION_SCRIPT = "nav/rover.sh"
 
     PORT = 5000
-    BASE_IP = socket.gethostname() # TODO:
+    # change to the IPv4 address of the base 
+    BASE_IP = "192.168.55.241"
 
     control = controller.Controller(MOTOR_ARDUINO_PORT, MOTOR_ARDUINO_BAUD)
     manual_control = False
@@ -45,13 +46,14 @@ if __name__ == "__main__":
     client.connect((BASE_IP, PORT))
 
     sensors = Sensors(
-        metal=MetalDetector(METAL_ARDUINO_PORT)
+        metal=MetalDetector(METAL_ARDUINO_PORT, METAL_ARDUINO_BAUD)
     )
 
     # run RTK solution in another thread
     # subprocess.Popen(RTK_SOLUTION_SCRIPT) # TODO: uncomment
 
-    client.setblocking(False)
+    #client.setblocking(False) # TODO: cannot use this one?
+    client.settimeout(0.1)
     while True:
         try:
             bytes = client.recv(MAX_PACKAGE_BYTES)
@@ -69,7 +71,7 @@ if __name__ == "__main__":
                         control.send(cmd.decode("utf-8"))
                     except controller.IllegalControlCmd:
                         print("Illegal control command received!", file=sys.stderr)
-        except: # TODO: what error?
+        except socket.timeout:
             pass
 
         # measure sensor input

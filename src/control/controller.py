@@ -4,7 +4,7 @@ A basic controller that can send some commands to the motor driver arduino.
 
 import serial
 
-VALID_CMDS = ["w", "a", "s", "d", "up", "down", "left", "right", " "]
+VALID_CMDS = ["w", "a", "s", "d", "q", "e", "up", "down", "left", "right", " "]
 
 class IllegalControlCmd(Exception):
     pass
@@ -17,7 +17,7 @@ class Controller:
         if not is_cmd_valid(cmd):
             raise IllegalControlCmd(f"'{cmd}' is not a valid command!")
         
-        self.serial.write(cmd)
+        self.serial.write(cmd.encode("utf-8"))
 
 """ Returns `True` if the command is valid. """
 def is_cmd_valid(cmd: str) -> bool:
