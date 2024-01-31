@@ -9,8 +9,12 @@ from dataclasses import dataclass
 import tkinter as tk
 import sensor.shared
 import sensor.metal as metal
+import shared
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import numpy as np
+from PIL import Image, ImageTk
+import skimage
 
 FRAME_BORDER_WIDTH = 1
 WINDOW_COLUMNS, WINDOW_ROWS = 2, 4
@@ -24,6 +28,9 @@ PLOT_SIZE = (2.5, 2.5)
 METAL_PLOT_SAMPLES = 50 # TODO?
 # 
 METAL_PLOT_WINDOW = 10
+
+# display image height and width in pixels (ratio 3:4)
+IR_DISPLAY_WIDTH, IR_DISPLAY_HEIGHT = 800, 600
 
 # TODO: make members optional
 @dataclass
@@ -42,19 +49,33 @@ class InterfaceUpdatePacket:
     pmines: list[sensor.shared.Coord]
 
 def parse_packet(bytes: bytes) -> Optional[InterfaceUpdatePacket]:
-    if len(bytes) > 0: # TODO: does this not mean that client disconnected?
-        size = int.from_bytes(bytes[:rover.PACKAGE_HEADER_SIZE], "little")
+    if len(bytes) > 0:
+        # read header
+        # sensor data minus ir-camera
+        sensor_size = int.from_bytes(bytes[:int(shared.ROVER_MSG_HEADER_SIZE/2)], "little")
+        # ir-camera data
+        ircam_size = int.from_bytes(bytes[int(shared.ROVER_MSG_HEADER_SIZE/2):shared.ROVER_MSG_HEADER_SIZE], "little")
+
+        # read body
         # TODO: don't we want the other data?
-        dict = json.loads(bytes[rover.PACKAGE_HEADER_SIZE:rover.PACKAGE_HEADER_SIZE+size].decode("utf-8"))
+        sensory = json.loads(bytes[shared.ROVER_MSG_HEADER_SIZE:shared.ROVER_MSG_HEADER_SIZE+sensor_size].decode("utf-8"))
+        if ircam_size > 0:
+            ircam = np.frombuffer(
+                bytes[shared.ROVER_MSG_HEADER_SIZE+sensor_size:shared.ROVER_MSG_HEADER_SIZE+sensor_size+ircam_size],
+                dtype="float16" # TODO: variable
+            )
+            np.reshape(ircam, newshape=(sensor.shared.IR_IMG_SIZE))
+        else:
+            ircam = None
 
         return InterfaceUpdatePacket(
-            metal=dict.get("metal", None),
-            sonar=dict.get("sonar", None),
-            ircam=dict.get("ircam", None),
-            path=dict.get("path", []),
-            mines=dict.get("mines", []),
-            pmines=dict.get("pmines", [])
-        )      
+            metal=sensory.get("metal", None),
+            sonar=sensory.get("sonar", None),
+            ircam=ircam,
+            path=sensory.get("path", []),
+            mines=sensory.get("mines", []),
+            pmines=sensory.get("pmines", [])
+        )
     else:
         return None
 
@@ -96,8 +117,7 @@ class Interface:
 
         self.__init_metal_frame()
         self.__init_sonar_frame()
-        ircam_info = tk.Label(master=self.ircam_frame, text="IR-camera")
-        ircam_info.pack()
+        self.__init_ircam_frame()
         self.__init_map_frame()
 
         # for metal frame to be rendered correctly, it should happen at the end of initialization
@@ -111,6 +131,7 @@ class Interface:
         if data is not None:
             self.__update_metal_frame(data)
             self.__update_sonar_frame(data)
+            self.__update_ircam_frame(data)
         
         self.window.update()
 
@@ -119,7 +140,7 @@ class Interface:
         return control_switch_requested
 
     def __init_metal_frame(self):
-        PLOT_COLORS = ["red", "green", "blue"]
+        PLOT_COLORS = ["red", "blue", "green"]
 
         self.metal_frame.bind("<Configure>", self.__resize_metal_frame)
 
@@ -187,8 +208,18 @@ class Interface:
                 sonar_idx += 1
 
     def __init_ircam_frame(self):
-        # TODO: 3:2 image
-        pass
+        ircam_title = tk.Label(master=self.ircam_frame, text="IR-camera")
+        ircam_title.pack()
+
+        self.img = ImageTk.PhotoImage(image=Image.fromarray(
+            np.uint8(np.zeros((IR_DISPLAY_HEIGHT, IR_DISPLAY_WIDTH, 3))),
+            mode="RGB"
+        ))
+
+        canvas = tk.Canvas(master=self.ircam_frame, width=IR_DISPLAY_WIDTH, height=IR_DISPLAY_HEIGHT)
+        # TODO: use display size
+        canvas.create_image(0, 0, anchor="nw", image=self.img)
+        canvas.pack(pady=2)
 
     def __init_map_frame(self):
         # TODO: show route of rover + mine location + prediction mine locations
@@ -253,15 +284,19 @@ class Interface:
             self.metal_plots[n] = (fig, ax, line, bg_cache)
 
     def __update_sonar_frame(self, data: InterfaceUpdatePacket):
+        MAPPING = [9, 4, 8, 3, 7, 2, 6, 1, 5, 0]
+
         if data.sonar is not None:
-            for i, dist in enumerate(data.sonar):
+            for i in range(len(data.sonar)):
+                dist = data.sonar[MAPPING[i]]
                 self.sonar_dists[i] = dist
-                self.sonar_labels[i].set(f"{dist:.0f}cm")
+                self.sonar_labels[i].set(f"{dist:.0f}cm {i}")
 
             self.__resize_sonar_frame()
 
     def __resize_sonar_frame(self, _: Optional[tk.Event] = None):
         LENGTH_MULTIPLIER = 7.5
+        MAX_DISPLAY_DIST = 10000
 
         framew, frameh = self.sonar_frame.winfo_width(), self.sonar_frame.winfo_height()
 
@@ -273,8 +308,13 @@ class Interface:
             y = -s * SONAR_BLOCK_RADIUS + SONAR_Y_OFFSET
 
             # dir = direction of the laser, guaranteed to be a unit vector
-            for dir, x in [((c, -s), x + SONAR_X_OFFSET), ((-c, -s), -(x + SONAR_X_OFFSET))]:                    
-                length = self.sonar_dists[sonar_idx] * LENGTH_MULTIPLIER
+            for dir, x in [((c, -s), x + SONAR_X_OFFSET), ((-c, -s), -(x + SONAR_X_OFFSET))]: 
+                if self.sonar_dists[sonar_idx] == float("inf"):
+                    dist = MAX_DISPLAY_DIST
+                else:
+                    dist = self.sonar_dists[sonar_idx]
+
+                length = dist * LENGTH_MULTIPLIER
                 # origin and end coordinates
                 x0, y0 = x + framew/2, frameh+y
                 x1, y1 = x0 + dir[0]*length, y0 + dir[1]*length
@@ -282,6 +322,35 @@ class Interface:
                 # update laser position
                 self.sonar_frame.coords(self.sonar_lasers[sonar_idx], x0, y0, x1, y1)
                 sonar_idx += 1
+
+    def __update_ircam_frame(self, data: InterfaceUpdatePacket):
+        MIN_TEMP = 20.0
+        MAX_TEMP = 45.0
+
+        COLORS = [np.array([0,0,1]), np.array([0,1,1]), np.array([0,1,0]), np.array([1,1,0]), np.array([1,0,0])]
+
+        if data.ircam is not None:          
+            small_img = data.ircam.astype("float32")
+
+            # map onto temperature range
+            small_img = np.clip((small_img - MIN_TEMP) / (MAX_TEMP - MIN_TEMP), 0.0, 0.999)
+            # we map each value to a color in COLORS
+            col_idx = small_img * len(COLORS)
+            # however, this is a fraction, so we mix the colors on either side
+            col_idx0 = np.floor(col_idx)
+            col_idx1 = col_idx0 + 1
+            frac = col_idx - col_idx0
+
+            # mix
+            col0 = np.array([COLORS[int(i)] for i in col_idx0])
+            col1 = np.array([COLORS[int(i)] for i in col_idx1])
+            col_img = np.array([(col1 - col0) * frac + col0 for col0, col1, frac in zip(col0, col1, frac)])\
+                .reshape((sensor.shared.IR_IMG_HEIGHT, sensor.shared.IR_IMG_WIDTH, 3))
+
+            # upscale image
+            interpolated_img = skimage.transform.resize(col_img, (IR_DISPLAY_HEIGHT, IR_DISPLAY_WIDTH))
+
+            self.img.paste(Image.fromarray(np.uint8(interpolated_img * 255), mode="RGB"))
 
     def __change_control(self):
         self.__manual_control_requested = not self.__manual_control_requested
