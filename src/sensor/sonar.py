@@ -48,3 +48,4 @@ def measure():
             dist = float('inf')
 
         dists.append(dist)
+    return dists

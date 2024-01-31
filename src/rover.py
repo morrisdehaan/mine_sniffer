@@ -15,6 +15,7 @@ from sensor.metal import MetalDetector
 import base
 import control.controller as controller
 import sensor.sonar as sonar
+from sensor.ircam import IRCam
 import shared
 
 METAL_ARDUINO_PORT = "/dev/ttyUSB0" # "COM4"
@@ -48,7 +49,8 @@ if __name__ == "__main__":
     client.connect((BASE_IP, PORT))
 
     sensors = Sensors(
-        metal=MetalDetector(METAL_ARDUINO_PORT, METAL_ARDUINO_BAUD)
+        metal=MetalDetector(METAL_ARDUINO_PORT, METAL_ARDUINO_BAUD),
+        ircam=IRCam()
     )
 
     # run RTK solution in another thread
@@ -79,6 +81,7 @@ if __name__ == "__main__":
         # measure sensor input
         metal = sensors.metal.detect()
         sonar_dists = sonar.measure()
+        ircam_updated = sensors.ircam.update()
 
         # detect mines
         # ..
@@ -94,9 +97,20 @@ if __name__ == "__main__":
             "metal": metal,
             "sonar": sonar_dists
         }
+
+        if ircam_updated:
+            # ir-camera data is serialized separately, because json can only handle
+            #  python floats which are way too big
+            ircam_bytes = sensors.ircam.img.tobytes()
+        else:
+            ircam_bytes = b""
+        
         bytes = json.dumps(data).encode("utf-8")
-        header = len(bytes).to_bytes(shared.ROVER_MSG_HEADER_SIZE, "little")
-        client.send(header + bytes)
+        header = len(bytes).to_bytes(int(shared.ROVER_MSG_HEADER_SIZE / 2), "little")\
+               + len(ircam_bytes).to_bytes(int(shared.ROVER_MSG_HEADER_SIZE / 2), "little")
+               
+        # we send the header, sensor data (minus ir-camera) and ir-camera data
+        client.send(header + bytes + ircam_bytes)
 
         time.sleep(0.01) # TODO: weg?
 
