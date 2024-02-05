@@ -6,6 +6,7 @@ import socket
 import interface
 import keyboard as kb
 import control.controller as controller
+import time
 
 # TODO: rename package to msg everywhere
 # TODO: fix import errors
@@ -47,6 +48,10 @@ if __name__ == "__main__":
     rover_connected = False
     server.setblocking(False)
 
+    # fps management
+    lastframetime = time.time()
+    time_delta = 1.0 / 60.0
+
     while True:
         control_switch = itf.update(update)
 
@@ -80,6 +85,11 @@ if __name__ == "__main__":
         # kill switch
         if kb.is_pressed("-"):
             break
+
+        # manage fps
+        while time.time() < lastframetime + time_delta:
+            time.sleep(0.01)
+        lastframetime = time.time()
     
     rover_conn.close()
     server.close()

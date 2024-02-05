@@ -10,8 +10,8 @@ ROVER_RPM = 10 # TODO
 
 # in seconds
 MAX_DRIVE_TIME = 15
-# time to spin 360°
-MAX_SPIN_TIME = 5 # TODO: measure
+# experimentaly we found this to give nice results
+MAX_SPIN_TIME = 0.8
 
 # in cm
 MIN_DIST = 50
@@ -23,11 +23,11 @@ class State(Enum):
     PrepareSpin1 = 1
     # spin until random angle is reached or obstacle is in the way
     Spin1 = 2
-    # again, spin until obstacle is out of sight
+    # if obstacle was in the way, spin in opposite direction until obstacle is out of sight
     PrepareSpin2 = 3
     # spin to random angle between the two times obstacles were detected
     Spin2 = 4
-    # enough spinning around, just take the first free direction
+    # somehow there is still an obstacle, just take the first free direction
     GreedySpin = 5
 
 class Rotation(Enum):
@@ -36,13 +36,10 @@ class Rotation(Enum):
 
 class Planner:
     def __init__(self):
-        self._state = State.RandomSpin
-        if random.randint(0, 1) == 0:
-            self._spin_dir = Rotation.Clockwise
-        else:
-            self._spin_dir = Rotation.Counterclockwise
+        self._state = State.Drive
+        self._drive_time = time.time() + random.uniform(0, MAX_DRIVE_TIME)
         
-    def update(self, sonar: list[float]):
+    def update(self, sonar: list[float]) -> str:
         blocked = detect_obstacle(sonar)
 
         t = time.time()
@@ -51,7 +48,7 @@ class Planner:
             if blocked or t > self._drive_time:
                 self._state = State.PrepareSpin1
 
-                if random.randint(0, 1) == 0:
+                if min(sonar[:5]) < min(sonar[5:]):
                     self._spin_dir = Rotation.Clockwise
                 else:
                     self._spin_dir = Rotation.Counterclockwise
@@ -91,21 +88,21 @@ class Planner:
                 self._state = State.Drive
                 self._drive_time = t + random.uniform(0, MAX_DRIVE_TIME)
 
+        if self._state == State.Drive:
+            return "w"
+        elif self._spin_dir == Rotation.Clockwise:
+            return "e"
+        else:
+            return "q"
+
     def _flip_spin(self):
         if self._spin_dir == Rotation.Clockwise:
             self._spin_dir = Rotation.Counterclockwise
         else:
             self._spin_dir = Rotation.Clockwise
-    
-    # TODO: weg?
-    def _init_state(self):
-        match self._state:
-            case State.Drive:
-                # at which time a new direction is picked
-                self._drive_time = time.time() + random.uniform(0, MAX_DRIVE_TIME)
-            case State.PrepareSpin1:
-                # at which time the rover starts driving forwards
-                self._spin_time = time.time() + random.uniform(0, MAX_SPIN_TIME)
 
 def detect_obstacle(sonar: list[float]) -> bool:
-    any(x <= MIN_DIST for x in sonar)
+    for i, d in enumerate(sonar):
+        if i != 4 and i != 9 and d <= MIN_DIST:
+            return True
+    return False

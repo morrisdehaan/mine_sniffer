@@ -382,6 +382,7 @@ void powerWheelMotors(Direction dir) {
 
     bool spin_dir = dir == Direction::Counterclockwise;
 
+    // TODO: this is doubled??
     powerLeftWheels(!spin_dir);
     powerRightWheels(spin_dir);
     powerLeftWheels(!spin_dir);

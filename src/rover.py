@@ -10,17 +10,16 @@ import time
 import json
 import sys
 from sensor.sensors import Sensors
-import interface
 from sensor.metal import MetalDetector
-import base
 import control.controller as controller
 import sensor.sonar as sonar
 from sensor.ircam import IRCam
 import shared
+from control.planner import Planner
 
 METAL_ARDUINO_PORT = "/dev/ttyUSB0" # "COM4"
 METAL_ARDUINO_BAUD = 9600
-MOTOR_ARDUINO_PORT = "/dev/ttyACM0" # "COM5"
+MOTOR_ARDUINO_PORT = "/dev/ttyACM1" # "COM5"
 MOTOR_ARDUINO_BAUD = 115200
 
 """ Parsed message into separate commands. """
@@ -28,13 +27,13 @@ def parse_msg(msg: bytes) -> list[bytes]:
     cmds = []
     i = 0
     while i < len(msg):
-        size = int.from_bytes(msg[i:i+base.MSG_HEADER_SIZE], "little")
-        cmds.append(msg[i+base.MSG_HEADER_SIZE:i+base.MSG_HEADER_SIZE+size])
-        i += base.MSG_HEADER_SIZE + size
+        size = int.from_bytes(msg[i:i+shared.MSG_HEADER_SIZE], "little")
+        cmds.append(msg[i+shared.MSG_HEADER_SIZE:i+shared.MSG_HEADER_SIZE+size])
+        i += shared.MSG_HEADER_SIZE + size
     return cmds
 
 if __name__ == "__main__":
-    MAX_PACKAGE_BYTES = 1024 # TODO: pick appropiate number
+    MAX_PACKAGE_BYTES = 16384 # TODO: pick appropiate number
     RTK_SOLUTION_SCRIPT = "nav/rover.sh"
 
     PORT = 5000
@@ -42,7 +41,7 @@ if __name__ == "__main__":
     BASE_IP = "192.168.55.241"
 
     control = controller.Controller(MOTOR_ARDUINO_PORT, MOTOR_ARDUINO_BAUD)
-    manual_control = False
+    manual_control = True
 
     # connect to base server
     client = socket.socket()
@@ -52,6 +51,8 @@ if __name__ == "__main__":
         metal=MetalDetector(METAL_ARDUINO_PORT, METAL_ARDUINO_BAUD),
         ircam=IRCam()
     )
+
+    planner = Planner()
 
     # run RTK solution in another thread
     # subprocess.Popen(RTK_SOLUTION_SCRIPT) # TODO: uncomment
@@ -65,9 +66,9 @@ if __name__ == "__main__":
             cmds = parse_msg(bytes)
 
             for cmd in cmds:
-                if cmd == base.MANUAL_CONTROL_MSG:
+                if cmd == shared.MANUAL_CONTROL_MSG:
                     manual_control = True
-                elif cmd == base.AUTO_CONTROL_MSG:
+                elif cmd == shared.AUTO_CONTROL_MSG:
                     manual_control = False
                 # otherwise it is a manual control command
                 elif manual_control:
@@ -90,7 +91,8 @@ if __name__ == "__main__":
         # ..
 
         # control motors
-        # ..
+        if not manual_control:
+            control.send(planner.update(sonar_dists))
 
         # send data to base
         data = {
